@@ -1,2 +1,2 @@
-# authorization-server
+# Authorization-server
 Auth Server using Oauth2
