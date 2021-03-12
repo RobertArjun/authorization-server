@@ -153,3 +153,75 @@ to validate the jwt token paste the token in jwt.io
 ```
 http://localhost:8080/oauth2/jwks
 ```
+## GetToken without client secret ( ref authserver2 source code )
+changes only in RegisteredClientRepository i.e without client secret
+```
+@Bean
+	public RegisteredClientRepository registeredClientRepository() {
+		RegisteredClient client = RegisteredClient.withId("client").clientId("client1")
+				.clientAuthenticationMethod(ClientAuthenticationMethod.BASIC)
+				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+				.redirectUri("http://localhost:8080/authorized").scope("read").build();
+
+		return new InMemoryRegisteredClientRepository(client);
+	}
+```
+### 1. create the code_verifier for to verify the access code
+```
+private static final SecureRandom sr = new SecureRandom();
+
+	public static String getCode() {
+		byte[] code = new byte[32];
+		sr.nextBytes(code);
+
+		String codeVerifier = Base64.getUrlEncoder().withoutPadding().encodeToString(code);
+		System.out.println(codeVerifier);
+		return codeVerifier;
+	}
+```
+
+### 2. create the code_challenge code
+```
+public static void main(String[] args) {
+		try {
+			MessageDigest md = MessageDigest.getInstance("SHA-256");
+			byte[] digested = md.digest(CodeVerifier.getCode().getBytes());
+			String codeChallenge = Base64.getUrlEncoder().withoutPadding().encodeToString(digested);
+			System.out.println(codeChallenge);
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+```
+Once you ran the main method it will print the two hexa code. store to somewhere else
+
+### Testing
+#### 1. To get the Authorize Code
+```
+http://localhost:8080/oauth2/authorize?response_type=code&client_id=client1&scope=read&code_challenge=40YFqVvcDivbT2g2XHsI4HMqJig1vXJ3jg_EAamWY5s&code_challenge_method=S256
+```
+here we have to pass additional two parameeter code_challenge and code_challenge_method
+code_challenge i.e code_chellange 2nd hexa code
+code_challenge_method i.e which algorthem we used for generate message digest in our case we used SHA-256
+
+after success login
+```
+http://localhost:8080/authorized?code=R5WAP-igBTvO09dopmCIZuLk5YOgMpHtnjzm8hqJJOZdG9iMcQhXJg0qigPcRDabciGLcSqDtPpw4NIwQ1C2shscxwhfTwBScIbj5T-Usoe_6Ljqx9upKAvp2MZZWH3V
+```
+#### 2. To get the Access Token
+```
+http://localhost:8080/oauth2/token?grant_type=authorization_code&code=R5WAP-igBTvO09dopmCIZuLk5YOgMpHtnjzm8hqJJOZdG9iMcQhXJg0qigPcRDabciGLcSqDtPpw4NIwQ1C2shscxwhfTwBScIbj5T-Usoe_6Ljqx9upKAvp2MZZWH3V&scope=read&client_id=client1&code_verifier=sR0a5TBo1DmYMUpdHVjiHaC8pHCtyJGQLTj4nfq8vBo
+```
+code_verifier i.e first hexa code generate by utils class
+
+##### better we need to exeute only one and save to some other places
+
+output
+```
+{
+    "access_token": "eyJraWQiOiIyMmY5OTkwZi0yYmMyLTQzZjItOTkyYS1iNjg3NzIyNDZjMDEiLCJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJyb2JlcnQiLCJhdWQiOiJjbGllbnQxIiwibmJmIjoxNjE1NTQ3NjkzLCJzY29wZSI6WyJyZWFkIl0sImlzcyI6Imh0dHBzOlwvXC9vYXV0aDIucHJvdmlkZXIuY29tIiwiZXhwIjoxNjE1NTUxMjkzLCJpYXQiOjE2MTU1NDc2OTMsImp0aSI6IjM1ZGY3YzNhLWUyODktNDYyYS1iZjdmLTM5M2Y3Y2RmMWM0MCJ9.et9g8gsNGwHecWv-lvWVwrCDdRNhnkjj8kkIqjcP78Yg59AopS-a7FM9WFcqQxAeLJMLqyQfvyLdDnMJSgE4Cw2viw-CfAvXm074c07nuDtAjkD4WWU6bm-bN7xN4SAAahpCmntz4WvUwrbQK5JlJmcXKdWLt5v6oh42WhthD6PxV3DDI3WaN9sAh9QHpIomsMuQ0cUgHfWmc4qemAg4CdW4_rFgQYIy9-OScWbYhp0QEzBW4Zss6PuPL73h0EDt9ezRDvsEuG2yUSN4HaCRJhS5ViHVu5rbjc6shANtnwkVrQTjg-8Db5FsxkCLqc-cmizHWVXXeMUO4YxK0DXfVw",
+    "scope": "read",
+    "token_type": "Bearer",
+    "expires_in": "3599"
+}
+
+```
